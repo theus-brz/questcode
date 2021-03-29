@@ -5,7 +5,7 @@ metadata:
   labels:
     app: frontend
 spec:
-  replicas: 3
+  replicas: {{ .Values.replicas }}
   selector:
     matchLabels:
       app: frontend
@@ -16,6 +16,6 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: theusbrz/questcode-frontend:beta-staging
+        image: theusbrz/questcode-frontend:{{ .Values.image.tag }}
         ports:
         - containerPort: 80
