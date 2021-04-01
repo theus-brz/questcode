@@ -44,15 +44,16 @@ podTemplate(
       echo "Iniciando clone do repositório"
       REPOS = checkout([$class: 'GitSCM', branches: [[name: '*/main'], [name: '*/develop']], extensions: [], userRemoteConfigs: [[credentialsId: 'github', url: GIT_REPOS_URL]]]) 
       GIT_BRANCH = REPOS.GIT_BRANCH
-      if (GIT_BRANCH.equals('main')) {
+      if (GIT_BRANCH.equals('origin/main')) {
         KUBE_NAMESPACE = 'prod'
         ENVIRONMENT = 'production'
-      } else if (GIT_BRANCH.equals('develop')) {
+      } else if (GIT_BRANCH.equals('origin/develop')) {
         KUBE_NAMESPACE = 'staging'
         ENVIRONMENT = 'staging'
       } else {
-        echo "Nao existe pipeline para a branch ${GIT_BRANCH}"
-        exit 0
+        def error = "Nao existe pipeline para a branch ${GIT_BRANCH}"
+        echo error
+        throw new Exception(error)
       }
       HELM_DEPLOY_NAME = KUBE_NAMESPACE + "-frontend"
       sh "chmod +x -R ${env.WORKSPACE}"
