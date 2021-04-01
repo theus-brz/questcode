@@ -1,0 +1,91 @@
+podTemplate(
+  cloud: "kubernetes",
+  name: "questcode",
+  label: "questcode", 
+  namespace: "devops", 
+  containers: [
+    containerTemplate(
+      name: "docker-container", 
+      args: "9999999", 
+      command: "sleep", 
+      image: "docker", 
+      livenessProbe: containerLivenessProbe(
+        execArgs: "", 
+        failureThreshold: 0, 
+        initialDelaySeconds: 0, 
+        periodSeconds: 0, 
+        successThreshold: 0, 
+        timeoutSeconds: 0
+      ), 
+      resourceLimitCpu: "", 
+      resourceLimitEphemeralStorage: "", 
+      resourceLimitMemory: "", 
+      resourceRequestCpu: "", 
+      resourceRequestEphemeralStorage: "", 
+      resourceRequestMemory: "", 
+      workingDir: "/home/jenkins/agent"
+    ),
+    containerTemplate(
+      args: "9999999", 
+      command: "sleep", 
+      image: "lachlanevenson/k8s-helm:v2.11.0",
+      name: "helm-container", 
+      ttyEnabled: true,
+      workingDir: "/home/jenkins/agent"
+    ),
+  ], 
+  volumes: [
+    hostPathVolume(
+      hostPath: "/var/run/docker.sock", 
+      mountPath: "/var/run/docker.sock"
+    )
+  ]
+) {
+  node("questcode") {
+    def REPOS
+    def IMAGE_VERSION
+    def IMAGE_NAME = "questcode-frontend"
+    def ENVIRONMENT = "staging"
+    def GIT_REPOS_URL = "git@github.com:theus-brz/questcode.git"
+    def CHARTMUSEUM_URL = "http://chartmuseum-chartmuseum:8080"
+
+    stage("Checkout") {
+      echo "Iniciando clone do repositório"
+      REPOS = checkout([$class: 'GitSCM', branches: [[name: '*/main'], [name: '*/develop']], extensions: [], userRemoteConfigs: [[credentialsId: 'github', url: GIT_REPOS_URL]]]) 
+      sh "chmod +x -R ${env.WORKSPACE}"
+      IMAGE_VERSION = sh returnStdout: true, script: 'frontend/read-package-version.sh'
+      IMAGE_VERSION = IMAGE_VERSION.trim()
+    }
+    
+    stage("Package") {
+      container("docker-container") {
+        echo "Iniciando empacotamento com Docker"
+        withCredentials([
+          usernamePassword(
+            credentialsId: "dockerhub", 
+            passwordVariable: "DOCKER_HUB_PASSWORD", 
+            usernameVariable: "DOCKER_HUB_USER"
+          )
+        ]) {
+          sh """
+            docker login -u ${DOCKER_HUB_USER} -p ${DOCKER_HUB_PASSWORD}
+            docker build -t ${DOCKER_HUB_USER}/${IMAGE_NAME}:${IMAGE_VERSION} ./frontend --build-arg NPM_ENV=${ENVIRONMENT}
+            docker push ${DOCKER_HUB_USER}/${IMAGE_NAME}:${IMAGE_VERSION}
+          """
+        }
+      }
+    }
+    
+    stage("Deploy") {
+      container("helm-container") {
+        echo "Iniciando deploy com helm"
+        sh """
+          helm init --client-only --stable-repo-url https://charts.helm.sh/stable
+          helm repo add questcode ${CHARTMUSEUM_URL}
+          helm repo update
+          helm upgrade staging-frontend questcode/frontend --set image.tag=${IMAGE_VERSION}
+        """
+      }
+    }
+  }
+}
