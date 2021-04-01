@@ -5,24 +5,11 @@ podTemplate(
   namespace: "devops", 
   containers: [
     containerTemplate(
-      name: "docker-container", 
       args: "9999999", 
       command: "sleep", 
       image: "docker", 
-      livenessProbe: containerLivenessProbe(
-        execArgs: "", 
-        failureThreshold: 0, 
-        initialDelaySeconds: 0, 
-        periodSeconds: 0, 
-        successThreshold: 0, 
-        timeoutSeconds: 0
-      ), 
-      resourceLimitCpu: "", 
-      resourceLimitEphemeralStorage: "", 
-      resourceLimitMemory: "", 
-      resourceRequestCpu: "", 
-      resourceRequestEphemeralStorage: "", 
-      resourceRequestMemory: "", 
+      name: "docker-container", 
+      ttyEnabled: true,
       workingDir: "/home/jenkins/agent"
     ),
     containerTemplate(
