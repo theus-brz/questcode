@@ -83,6 +83,7 @@ podTemplate(
       container("helm-container") {
         echo "Iniciando deploy com helm"
         sh """
+          helm init --client-only
           helm repo add questcode ${CHARTMUSEUM_URL}
           helm repo update
         """
