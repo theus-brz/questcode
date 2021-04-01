@@ -44,14 +44,30 @@ podTemplate(
   node("questcode") {
     def REPOS
     def IMAGE_VERSION
+    def KUBE_NAMESPACE
     def IMAGE_NAME = "questcode-frontend"
-    def ENVIRONMENT = "staging"
+    def ENVIRONMENT
     def GIT_REPOS_URL = "git@github.com:theus-brz/questcode.git"
+    def GIT_BRANCH
+    def HELM_CHART_NAME = "questcode/frontend"
+    def HELM_DEPLOY_NAME
     def CHARTMUSEUM_URL = "http://chartmuseum-chartmuseum:8080"
 
     stage("Checkout") {
       echo "Iniciando clone do repositório"
       REPOS = checkout([$class: 'GitSCM', branches: [[name: '*/main'], [name: '*/develop']], extensions: [], userRemoteConfigs: [[credentialsId: 'github', url: GIT_REPOS_URL]]]) 
+      GIT_BRANCH = REPOS.GIT_BRANCH
+      if (GIT_BRANCH.equals('main')) {
+        KUBE_NAMESPACE = 'prod'
+        ENVIRONMENT = 'production'
+      } else if (GIT_BRANCH.equals('develop')) {
+        KUBE_NAMESPACE = 'staging'
+        ENVIRONMENT = 'staging'
+      } else {
+        echo "Nao existe pipeline para a branch ${GIT_BRANCH}"
+        exit 0
+      }
+      HELM_DEPLOY_NAME = KUBE_NAMESPACE + "-frontend"
       sh "chmod +x -R ${env.WORKSPACE}"
       IMAGE_VERSION = sh returnStdout: true, script: 'frontend/read-package-version.sh'
       IMAGE_VERSION = IMAGE_VERSION.trim()
@@ -80,11 +96,15 @@ podTemplate(
       container("helm-container") {
         echo "Iniciando deploy com helm"
         sh """
-          helm init --client-only --stable-repo-url https://charts.helm.sh/stable --service-account tiller
+          helm init --client-only --stable-repo-url https://charts.helm.sh/stable
           helm repo add questcode ${CHARTMUSEUM_URL}
           helm repo update
-          helm upgrade staging-frontend questcode/frontend --set image.tag=${IMAGE_VERSION}
         """
+        try {
+          sh "helm upgrade --namespace=${KUBE_NAMESPACE} ${HELM_DEPLOY_NAME} ${HELM_CHART_NAME} --set image.tag=${IMAGE_VERSION}"
+        } catch (Exception e) {
+          sh "helm install --namespace=${KUBE_NAMESPACE} ${HELM_DEPLOY_NAME} ${HELM_CHART_NAME} --set image.tag=${IMAGE_VERSION}"
+        }
       }
     }
   }
